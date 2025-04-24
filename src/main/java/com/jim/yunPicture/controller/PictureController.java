@@ -55,9 +55,18 @@ public class PictureController {
      */
     @PostMapping("/upload")
     @ApiOperation(value = "上传图片")
-    public BaseResponse<PictureVO> upload(@RequestPart MultipartFile file, PictureUploadRequest uploadRequest, HttpServletRequest request) {
+    public BaseResponse<PictureVO> uploadPicture(@RequestPart("file") MultipartFile file, PictureUploadRequest uploadRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
         PictureVO pictureVO = pictureService.uploadPicture(file, uploadRequest, loginUser);
+        return ResultUtil.success(pictureVO);
+    }
+
+    @PostMapping("/upload/url")
+    @ApiOperation(value = "上传图片(URL)")
+    public BaseResponse<PictureVO> uploadPictureByUrl(@RequestBody PictureUploadRequest pictureUploadRequest, HttpServletRequest request) {
+        UserVO loginUser = userService.getLoginUser(request);
+        String fileUrl = pictureUploadRequest.getFileUrl();
+        PictureVO pictureVO = pictureService.uploadPicture(fileUrl, pictureUploadRequest, loginUser);
         return ResultUtil.success(pictureVO);
     }
 
@@ -122,6 +131,7 @@ public class PictureController {
         Page<Picture> picturePage = pictureService.page(page, queryWrapper);
         List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(Picture::objToVO).collect(Collectors.toList());
         Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
+        // todo 根据创建用户id查询用户信息
         pictureVOPage.setRecords(pictureVOList);
         return ResultUtil.success(pictureVOPage);
     }
@@ -192,6 +202,7 @@ public class PictureController {
 
     /**
      * 编辑图片信息
+     *
      * @param pictureEditRequest
      * @param request
      * @return
@@ -225,6 +236,7 @@ public class PictureController {
 
     /**
      * 图片审核（管理员）
+     *
      * @param pictureReviewRequest
      * @param request
      */

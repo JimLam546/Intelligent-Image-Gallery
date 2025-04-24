@@ -16,7 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 * @createDate 2025-04-17 22:06:10
 */
 public interface PictureService extends IService<Picture> {
-    PictureVO uploadPicture(MultipartFile file, PictureUploadRequest uploadRequest, UserVO loginUser);
+    PictureVO uploadPicture(Object inputSource, PictureUploadRequest uploadRequest, UserVO loginUser);
 
     void validPicture(Picture picture);
 

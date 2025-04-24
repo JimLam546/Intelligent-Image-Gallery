@@ -15,13 +15,15 @@ import com.jim.yunPicture.entity.vo.PictureVO;
 import com.jim.yunPicture.entity.vo.UserVO;
 import com.jim.yunPicture.exception.ErrorCode;
 import com.jim.yunPicture.exception.ThrowUtils;
-import com.jim.yunPicture.manage.FileManager;
+import com.jim.yunPicture.manage.upload.FilePictureUpload;
+import com.jim.yunPicture.manage.upload.PictureUploadTemplate;
+import com.jim.yunPicture.manage.upload.UrlPictureUpload;
 import com.jim.yunPicture.service.PictureService;
 import com.jim.yunPicture.mapper.PictureMapper;
 import com.jim.yunPicture.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-import org.springframework.web.multipart.MultipartFile;
 
 import javax.annotation.Resource;
 import java.util.Date;
@@ -37,13 +39,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         implements PictureService {
 
     @Resource
-    private FileManager fileManager;
-
-
-    private static final String filePrefix = "temp";
+    private FilePictureUpload filePictureUpload;
 
     @Resource
     private UserService userService;
+    @Autowired
+    private UrlPictureUpload urlPictureUpload;
 
     /**
      * 上传图片
@@ -51,14 +52,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
      * @return
      */
     @Override
-    public PictureVO uploadPicture(MultipartFile file, PictureUploadRequest uploadRequest, UserVO loginUser) {
-        ThrowUtils.throwIf(file == null || file.isEmpty(), ErrorCode.PARAMS_ERROR);
+    public PictureVO uploadPicture(Object inputSource, PictureUploadRequest uploadRequest, UserVO loginUser) {
+        ThrowUtils.throwIf(inputSource == null, ErrorCode.PARAMS_ERROR);
         // 用于判断是新增还是修改
         Long pictureId = null;
         if (uploadRequest != null) {
             pictureId = uploadRequest.getId();
         }
-        if (pictureId != null) {
+        if (pictureId != null && pictureId > 0) {
             Picture oldPicture = this.getById(pictureId);
             ThrowUtils.throwIf(ObjectUtil.isNull(oldPicture), ErrorCode.NOT_FOUND_ERROR, "图片不存在");
             // 仅本人和管理员可以修改
@@ -66,7 +67,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                             && !userService.isAdmin(loginUser),
                     ErrorCode.OPERATION_ERROR, "无权限");
         }
-        PictureUploadResult pictureUploadResult = fileManager.uploadPicture(file, loginUser);
+        PictureUploadTemplate pictureUploadTemplate = filePictureUpload;
+        if (inputSource instanceof String) {
+            pictureUploadTemplate = urlPictureUpload;
+        }
+        PictureUploadResult pictureUploadResult = pictureUploadTemplate.uploadPicture(inputSource, loginUser);
         Picture picture = PictureUploadResult.objToDO(pictureUploadResult, loginUser);
         fillReviewParam(picture, loginUser);
         // 如果ID存在，则表示更新记录

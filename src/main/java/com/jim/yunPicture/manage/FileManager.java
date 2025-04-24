@@ -58,7 +58,6 @@ public class FileManager {
             file.transferTo(tempFile);
             PutObjectResult putObjectResult = cosManager.putObject(filePath, tempFile);
             ImageInfo imageInfo = putObjectResult.getCiUploadResult().getOriginalInfo().getImageInfo();
-            putObjectResult.getMetadata().getCiUploadResult().getOriginalInfo().getImageInfo();
             // 封装图片信息
             PictureUploadResult pictureUploadResult = new PictureUploadResult();
             int height = imageInfo.getHeight();

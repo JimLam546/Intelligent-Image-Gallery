@@ -2,7 +2,6 @@ package com.jim.yunPicture.entity.vo;
 
 import com.baomidou.mybatisplus.annotation.IdType;
 import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableLogic;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
@@ -93,8 +92,8 @@ public class PictureVO {
     private Date updateTime;
 
     /**
-     * 是否删除
+     * 创建用户信息
      */
-    @TableLogic
-    private Integer isDelete;
+    private UserVO user;
+
 }
