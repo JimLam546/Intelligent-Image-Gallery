@@ -12,6 +12,7 @@ import com.jim.yunPicture.common.BaseResponse;
 import com.jim.yunPicture.common.ResultUtil;
 import com.jim.yunPicture.constant.UserConstant;
 import com.jim.yunPicture.entity.Picture;
+import com.jim.yunPicture.entity.User;
 import com.jim.yunPicture.entity.enums.PictureReviewStatusEnum;
 import com.jim.yunPicture.entity.enums.UserRoleEnum;
 import com.jim.yunPicture.entity.request.*;
@@ -30,6 +31,7 @@ import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Date;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
 
@@ -68,6 +70,15 @@ public class PictureController {
         String fileUrl = pictureUploadRequest.getFileUrl();
         PictureVO pictureVO = pictureService.uploadPicture(fileUrl, pictureUploadRequest, loginUser);
         return ResultUtil.success(pictureVO);
+    }
+
+    @PostMapping("/upload/batch")
+    @ApiOperation(value = "批量上传内容图片")
+    @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
+    public BaseResponse<Integer> uploadPictureByBatch(@RequestBody PictureUploadByBatchRequest pictureUploadByBatchRequest, HttpServletRequest request) {
+        UserVO loginUser = userService.getLoginUser(request);
+        Integer count = pictureService.uploadPictureByBatch(pictureUploadByBatchRequest, loginUser);
+        return ResultUtil.success(count);
     }
 
     /**
@@ -131,7 +142,10 @@ public class PictureController {
         Page<Picture> picturePage = pictureService.page(page, queryWrapper);
         List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(Picture::objToVO).collect(Collectors.toList());
         Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
-        // todo 根据创建用户id查询用户信息
+        // 根据创建用户id查询用户信息
+        List<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toList());
+        Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
+        pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
         pictureVOPage.setRecords(pictureVOList);
         return ResultUtil.success(pictureVOPage);
     }

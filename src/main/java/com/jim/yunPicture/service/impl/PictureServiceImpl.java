@@ -10,9 +10,11 @@ import com.jim.yunPicture.entity.Picture;
 import com.jim.yunPicture.entity.dto.PictureUploadResult;
 import com.jim.yunPicture.entity.enums.PictureReviewStatusEnum;
 import com.jim.yunPicture.entity.request.PictureQueryRequest;
+import com.jim.yunPicture.entity.request.PictureUploadByBatchRequest;
 import com.jim.yunPicture.entity.request.PictureUploadRequest;
 import com.jim.yunPicture.entity.vo.PictureVO;
 import com.jim.yunPicture.entity.vo.UserVO;
+import com.jim.yunPicture.exception.BusinessException;
 import com.jim.yunPicture.exception.ErrorCode;
 import com.jim.yunPicture.exception.ThrowUtils;
 import com.jim.yunPicture.manage.upload.FilePictureUpload;
@@ -22,10 +24,15 @@ import com.jim.yunPicture.service.PictureService;
 import com.jim.yunPicture.mapper.PictureMapper;
 import com.jim.yunPicture.service.UserService;
 import lombok.extern.slf4j.Slf4j;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
+import java.io.IOException;
 import java.util.Date;
 
 /**
@@ -131,6 +138,50 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         } else {
             picture.setReviewStatus(PictureReviewStatusEnum.REVIEWING.getValue());
         }
+    }
+
+    @Override
+    public Integer uploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, UserVO loginUser) {
+        String searchText = pictureUploadByBatchRequest.getSearchText();
+        ThrowUtils.throwIf(CharSequenceUtil.isBlank(searchText), ErrorCode.PARAMS_ERROR, "搜索文本不能为空");
+        Integer count = pictureUploadByBatchRequest.getCount();
+        ThrowUtils.throwIf(count <= 0, ErrorCode.PARAMS_ERROR, "图片数量不能小于等于0");
+        ThrowUtils.throwIf(count > 30, ErrorCode.PARAMS_ERROR, "图片数量不能大于30");
+        // 抓取的网址
+        String fetchUrl = String.format("https://www.bing.com/images/async?q=%s&mmasync=1", searchText);
+        Document document = null;
+        try {
+            document = Jsoup.connect(fetchUrl).get();
+
+        } catch (IOException e) {
+            log.error("获取页面失败", e);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "获取页面失败");
+        }
+        Element imgpt = document.getElementsByClass("dgControl").first();
+        ThrowUtils.throwIf(ObjectUtil.isNull(imgpt), ErrorCode.OPERATION_ERROR, "获取页面失败");
+        Elements elements = imgpt.select("img.mimg");
+        int uploadCount = 0;
+        for(Element element : elements) {
+            String src = element.attr("src");
+            if (CharSequenceUtil.isBlank(src)) {
+                log.info("当前图片链接为空，已跳过:{}", src);
+                continue;
+            }
+            src = src.contains("?") ? src.substring(0, src.indexOf("?")) : src;
+            try {
+                PictureUploadRequest pictureUploadRequest = new PictureUploadRequest();
+                pictureUploadRequest.setFileUrl(src);
+                this.uploadPicture(src, pictureUploadRequest, loginUser);
+                log.info("图片上传成功，图片路径为：{}", src);
+                uploadCount++;
+                if (uploadCount >= count) {
+                    break;
+                }
+            } catch (Exception e) {
+                log.error("图片上传失败", e);
+            }
+        }
+        return uploadCount;
     }
 }
 

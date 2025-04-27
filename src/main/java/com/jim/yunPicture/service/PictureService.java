@@ -5,6 +5,7 @@ import com.jim.yunPicture.entity.Picture;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.jim.yunPicture.entity.dto.PictureUploadResult;
 import com.jim.yunPicture.entity.request.PictureQueryRequest;
+import com.jim.yunPicture.entity.request.PictureUploadByBatchRequest;
 import com.jim.yunPicture.entity.request.PictureUploadRequest;
 import com.jim.yunPicture.entity.vo.PictureVO;
 import com.jim.yunPicture.entity.vo.UserVO;
@@ -23,4 +24,6 @@ public interface PictureService extends IService<Picture> {
     QueryWrapper<Picture> getQueryWrapper(PictureQueryRequest pictureQueryRequest);
 
     void fillReviewParam(Picture picture, UserVO loginUser);
+
+    Integer uploadPictureByBatch(PictureUploadByBatchRequest pictureUploadByBatchRequest, UserVO loginUser);
 }

@@ -1,9 +1,12 @@
 package com.jim.yunPicture.entity;
 
+import cn.hutool.core.bean.BeanUtil;
 import com.baomidou.mybatisplus.annotation.*;
 
 import java.io.Serializable;
 import java.util.Date;
+
+import com.jim.yunPicture.entity.vo.UserVO;
 import lombok.Data;
 
 /**
@@ -87,4 +90,8 @@ public class User implements Serializable {
 
     @TableField(exist = false)
     private static final long serialVersionUID = 1L;
+
+    public static UserVO objToVO(User user) {
+        return BeanUtil.copyProperties(user, UserVO.class);
+    }
 }

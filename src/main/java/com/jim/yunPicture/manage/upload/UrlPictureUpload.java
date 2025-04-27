@@ -29,7 +29,7 @@ public class UrlPictureUpload extends PictureUploadTemplate{
 
     private static final List<String> ALLOWED_FILE_TYPES = Arrays.asList("image/jpeg", "image/png", "image/gif", "image/bmp");
 
-    private static final long TWO_MB = 1024 * 1024 * 2;
+    private static final long TWO_MB = 1024 * 1024 * 2L;
 
     @Override
     public void validPicture(Object inputSource) {
@@ -67,7 +67,6 @@ public class UrlPictureUpload extends PictureUploadTemplate{
                 httpResponse.close();
             }
         }
-
     }
 
 

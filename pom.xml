@@ -14,6 +14,13 @@
         <spring-boot.version>2.7.6</spring-boot.version>
     </properties>
     <dependencies>
+        <!-- html解析 -->
+        <dependency>
+            <groupId>org.jsoup</groupId>
+            <artifactId>jsoup</artifactId>
+            <version>1.17.2</version>
+        </dependency>
+
         <!--knife4j-->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
