@@ -2,13 +2,19 @@ package com.jim.yunPicture.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.core.lang.TypeReference;
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.RandomUtil;
+import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import com.github.xiaoymin.knife4j.annotations.ApiSupport;
 import com.jim.yunPicture.annotation.AuthCheck;
 import com.jim.yunPicture.common.BaseResponse;
+import com.jim.yunPicture.common.RedisKey;
 import com.jim.yunPicture.common.ResultUtil;
 import com.jim.yunPicture.constant.UserConstant;
 import com.jim.yunPicture.entity.Picture;
@@ -24,6 +30,7 @@ import com.jim.yunPicture.service.PictureService;
 import com.jim.yunPicture.service.UserService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -33,6 +40,9 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -51,6 +61,16 @@ public class PictureController {
 
     @Resource
     private UserService userService;
+
+    @Resource
+    private RedisTemplate<String, String> redisTemplate;
+
+    private final Cache<String, String> localCache = Caffeine.newBuilder()
+            .initialCapacity(1024)
+            .maximumSize(10000L)
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .build();
+
 
     /**
      * 上传图片
@@ -129,25 +149,84 @@ public class PictureController {
      * @param request
      * @return 返回脱敏图片信息列
      */
-    @PostMapping("/getVO/page")
+    // @PostMapping("/getVO/page")
+    // @ApiOperation(value = "获取图片列表")
+    // public BaseResponse<Page<PictureVO>> getPictureVOListByPage(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
+    //     // 注解已验证是否登录
+    //     userService.getLoginUser(request);
+    //     ThrowUtils.throwIf(pictureQueryRequest.getPageSize() > 100, ErrorCode.PARAMS_ERROR, "一页最大数量不能超过10");
+    //     Page<Picture> page = new Page<>(pictureQueryRequest.getCurrent(), pictureQueryRequest.getPageSize());
+    //     QueryWrapper<Picture> queryWrapper = pictureService.getQueryWrapper(pictureQueryRequest);
+    //     // 默认展示审核通过数据
+    //     queryWrapper.lambda().eq(Picture::getReviewStatus, PictureReviewStatusEnum.PASS.getValue());
+    //     Page<Picture> picturePage = pictureService.page(page, queryWrapper);
+    //     List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(Picture::objToVO).collect(Collectors.toList());
+    //     Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
+    //     // 根据创建用户id查询用户信息
+    //     List<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toList());
+    //     Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
+    //     pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
+    //     pictureVOPage.setRecords(pictureVOList);
+    //     return ResultUtil.success(pictureVOPage);
+    // }
+
+    @PostMapping("/getVO/page/cache")
     @ApiOperation(value = "获取图片列表")
-    public BaseResponse<Page<PictureVO>> getPictureVOListByPage(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
+    public BaseResponse<Page<PictureVO>> getPictureVOListByPageWithCache(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
         // 注解已验证是否登录
-        userService.getLoginUser(request);
         ThrowUtils.throwIf(pictureQueryRequest.getPageSize() > 100, ErrorCode.PARAMS_ERROR, "一页最大数量不能超过10");
-        Page<Picture> page = new Page<>(pictureQueryRequest.getCurrent(), pictureQueryRequest.getPageSize());
-        QueryWrapper<Picture> queryWrapper = pictureService.getQueryWrapper(pictureQueryRequest);
-        // 默认展示审核通过数据
-        queryWrapper.lambda().eq(Picture::getReviewStatus, PictureReviewStatusEnum.PASS.getValue());
-        Page<Picture> picturePage = pictureService.page(page, queryWrapper);
-        List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(Picture::objToVO).collect(Collectors.toList());
-        Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
-        // 根据创建用户id查询用户信息
-        List<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toList());
-        Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
-        pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
-        pictureVOPage.setRecords(pictureVOList);
-        return ResultUtil.success(pictureVOPage);
+        // todo 缓存穿透
+        userService.getLoginUser(request);
+        int current = pictureQueryRequest.getCurrent();
+        int pageSize = pictureQueryRequest.getPageSize();
+        String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
+        String md5Hex = DigestUtil.md5Hex(queryCondition);
+        String key = (RedisKey.PICTURE_PAGE_PREFIX + md5Hex).intern();
+        // 本地缓存
+        String localCacheValue = localCache.getIfPresent(key);
+        Page<PictureVO> localCachedPage = null;
+        if (ObjectUtil.isNotNull(localCacheValue)) {
+            localCachedPage = JSONUtil.toBean(localCacheValue, new TypeReference<Page<PictureVO>>() {
+            }.getType(), true);
+            return ResultUtil.success(localCachedPage);
+        }
+        // redis 缓存
+        String cachedValue = redisTemplate.opsForValue().get(key);
+        Page<PictureVO> cachedPage = null;
+        if (ObjectUtil.isNotNull(cachedValue)) {
+            cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {
+            }.getType(), true);
+            // redis 如果存在那么就写入本地缓存
+            localCache.put(key, cachedValue);
+            return ResultUtil.success(cachedPage);
+        }
+        // 防止缓存击穿
+        synchronized (key) {
+            String cachedPageStr = redisTemplate.opsForValue().get(key);
+            String localCachedPageStr = localCache.getIfPresent(key);
+            if (ObjectUtil.isNotNull(cachedPageStr) && ObjectUtil.isNotNull(localCachedPageStr)) {
+                return ResultUtil.success(localCachedPage);
+            }
+            Page<Picture> page = new Page<>(current, pageSize);
+            QueryWrapper<Picture> queryWrapper = pictureService.getQueryWrapper(pictureQueryRequest);
+            // 默认展示审核通过数据
+            queryWrapper.lambda().eq(Picture::getReviewStatus, PictureReviewStatusEnum.PASS.getValue());
+            Page<Picture> picturePage = pictureService.page(page, queryWrapper);
+            List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(Picture::objToVO).collect(Collectors.toList());
+            Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
+            // 根据创建用户id查询用户信息
+            List<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toList());
+            Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
+            pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
+            pictureVOPage.setRecords(pictureVOList);
+            // 设置随机过期时间
+            int randomSeconds = 300 + RandomUtil.randomInt(0, 300);
+            String pageJsonStr = JSONUtil.toJsonStr(pictureVOPage);
+            // 将查询结果写入 redis 和 caffeine
+            redisTemplate.opsForValue().set(key, pageJsonStr, randomSeconds, TimeUnit.SECONDS);
+            localCache.put(key, pageJsonStr);
+            return ResultUtil.success(pictureVOPage);
+        }
     }
 
     /**
