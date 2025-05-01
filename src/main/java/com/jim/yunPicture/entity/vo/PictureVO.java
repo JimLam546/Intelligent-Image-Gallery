@@ -97,4 +97,14 @@ public class PictureVO {
      */
     private UserVO user;
 
+    /**
+     * 被压缩后的图片 url
+     */
+    private String compressedUrl;
+
+    /**
+     * 缩略图 url
+     */
+    private String thumbnailUrl;
+
 }

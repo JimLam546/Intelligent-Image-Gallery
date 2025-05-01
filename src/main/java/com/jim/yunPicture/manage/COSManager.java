@@ -1,5 +1,6 @@
 package com.jim.yunPicture.manage;
 
+import cn.hutool.core.io.FileUtil;
 import com.jim.yunPicture.config.COSClientConfig;
 import com.qcloud.cos.COSClient;
 import com.qcloud.cos.model.COSObject;
@@ -10,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.io.File;
+import java.util.LinkedList;
 
 /**
  * @author Jim_Lam
@@ -30,6 +32,21 @@ public class COSManager {
         PicOperations picOperations = new PicOperations();
         // 1 表示返回原图信息
         picOperations.setIsPicInfo(1);
+        LinkedList<PicOperations.Rule> rules = new LinkedList<>();
+        // 添加图片处理规则
+        String webpKey = FileUtil.mainName(path) + ".webp";
+        PicOperations.Rule compressRule = new PicOperations.Rule();
+        compressRule.setBucket(cosClientConfig.getBucketName());
+        compressRule.setFileId(webpKey);
+        compressRule.setRule("imageMogr2/format/webp");
+        rules.add(compressRule);
+        PicOperations.Rule thumbnailRule = new PicOperations.Rule();
+        thumbnailRule.setBucket(cosClientConfig.getBucketName());
+        thumbnailRule.setFileId(FileUtil.mainName(path) + "_thumbnail.webp");
+        thumbnailRule.setRule("imageView2/thumbnail/128x128");
+        rules.add(thumbnailRule);
+        // 构造图片处理规则
+        picOperations.setRules(rules);
         putObjectRequest.setPicOperations(picOperations);
         return cosClient.putObject(putObjectRequest);
     }

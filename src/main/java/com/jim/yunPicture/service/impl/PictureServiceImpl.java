@@ -1,12 +1,20 @@
 package com.jim.yunPicture.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import cn.hutool.core.lang.TypeReference;
 import cn.hutool.core.text.CharSequenceUtil;
 import cn.hutool.core.util.ObjectUtil;
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import com.jim.yunPicture.common.BaseResponse;
+import com.jim.yunPicture.common.ResultUtil;
 import com.jim.yunPicture.entity.Picture;
+import com.jim.yunPicture.entity.User;
 import com.jim.yunPicture.entity.dto.PictureUploadResult;
 import com.jim.yunPicture.entity.enums.PictureReviewStatusEnum;
 import com.jim.yunPicture.entity.request.PictureQueryRequest;
@@ -28,12 +36,16 @@ import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 
 import javax.annotation.Resource;
 import java.io.IOException;
 import java.util.Date;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * @author Jim_Lam
@@ -50,8 +62,18 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Resource
     private UserService userService;
-    @Autowired
+
+    @Resource
     private UrlPictureUpload urlPictureUpload;
+
+    @Resource
+    private RedisTemplate<String, String> redisTemplate;
+
+    private static final Cache<String, String> localCache = Caffeine.newBuilder()
+            .initialCapacity(1024)
+            .maximumSize(10000L)
+            .expireAfterWrite(5, TimeUnit.MINUTES)
+            .build();
 
     /**
      * 上传图片
@@ -182,6 +204,64 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             }
         }
         return uploadCount;
+    }
+
+    @Override
+    public BaseResponse<Page<PictureVO>> getPictureVOListByPageWithCache(PictureQueryRequest pictureQueryRequest, String key) {
+        int current = pictureQueryRequest.getCurrent();
+        int pageSize = pictureQueryRequest.getPageSize();
+        // 本地缓存
+        String localCacheValue = localCache.getIfPresent(key);
+        Page<PictureVO> localCachedPage = null;
+        if (ObjectUtil.isNotNull(localCacheValue)) {
+            localCachedPage = JSONUtil.toBean(localCacheValue, new TypeReference<Page<PictureVO>>() {
+            }.getType(), true);
+            return ResultUtil.success(localCachedPage);
+        }
+        // redis 缓存
+        String cachedValue = redisTemplate.opsForValue().get(key);
+        Page<PictureVO> cachedPage = null;
+        if (ObjectUtil.isNotNull(cachedValue)) {
+            cachedPage = JSONUtil.toBean(cachedValue, new TypeReference<Page<PictureVO>>() {
+            }.getType(), true);
+            // redis 如果存在那么就写入本地缓存
+            localCache.put(key, cachedValue);
+            return ResultUtil.success(cachedPage);
+        }
+        // 防止缓存击穿
+        synchronized (key.intern()) {
+            String cachedPageStr = redisTemplate.opsForValue().get(key);
+            String localCachedPageStr = localCache.getIfPresent(key);
+            if (ObjectUtil.isNotNull(cachedPageStr) && ObjectUtil.isNotNull(localCachedPageStr)) {
+                return ResultUtil.success(localCachedPage);
+            }
+            Page<Picture> page = new Page<>(current, pageSize);
+            QueryWrapper<Picture> queryWrapper = this.getQueryWrapper(pictureQueryRequest);
+            // 默认展示审核通过数据
+            queryWrapper.lambda().eq(Picture::getReviewStatus, PictureReviewStatusEnum.PASS.getValue());
+            Page<Picture> picturePage = this.page(page, queryWrapper);
+            List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(picture -> {
+                // 返回压缩后的图片Url
+                PictureVO pictureVO = Picture.objToVO(picture);
+                if (ObjectUtil.isNotNull(picture.getThumbnailUrl())) {
+                    pictureVO.setUrl(picture.getThumbnailUrl());
+                }
+                return pictureVO;
+            }).collect(Collectors.toList());
+            Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
+            // 根据创建用户id查询用户信息
+            List<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toList());
+            Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
+            pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
+            pictureVOPage.setRecords(pictureVOList);
+            // 设置随机过期时间
+            int randomSeconds = 300 + RandomUtil.randomInt(0, 300);
+            String pageJsonStr = JSONUtil.toJsonStr(pictureVOPage);
+            // 将查询结果写入 redis 和 caffeine
+            redisTemplate.opsForValue().set(key, pageJsonStr, randomSeconds, TimeUnit.SECONDS);
+            localCache.put(key, pageJsonStr);
+            return ResultUtil.success(pictureVOPage);
+        }
     }
 }
 

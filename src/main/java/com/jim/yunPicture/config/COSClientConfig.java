@@ -45,16 +45,16 @@ public class COSClientConfig {
     // 创建 COSClient 实例，这个实例用来后续调用请求
     @Bean
     public COSClient cosClient() {
-        // 设置用户身份信息。
+        // 设置用户身份信息
         COSCredentials cred = new BasicCOSCredentials(secretId, secretKey);
 
-        // ClientConfig 中包含了后续请求 COS 的客户端设置：
+        // ClientConfig 中包含了后续请求 COS 的客户端设置
         ClientConfig clientConfig = new ClientConfig();
 
         // 设置 bucket 的地域
         clientConfig.setRegion(new Region(region));
 
-        // 生成 cos 客户端。
+        // 生成 cos 客户端
         return new COSClient(cred, clientConfig);
     }
 }

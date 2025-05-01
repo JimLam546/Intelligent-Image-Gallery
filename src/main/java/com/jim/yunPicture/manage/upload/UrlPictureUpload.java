@@ -2,12 +2,10 @@ package com.jim.yunPicture.manage.upload;
 
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.text.CharSequenceUtil;
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.*;
 import com.jim.yunPicture.exception.BusinessException;
 import com.jim.yunPicture.exception.ErrorCode;
 import com.jim.yunPicture.exception.ThrowUtils;
-import com.qcloud.cos.utils.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 

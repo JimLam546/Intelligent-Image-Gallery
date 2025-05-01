@@ -52,6 +52,16 @@ public class PictureUploadResult implements Serializable {
      */
     private String picFormat;
 
+    /**
+     * 被压缩后的图片 url
+     */
+    private String compressedUrl;
+
+    /**
+     * 缩略图 url
+     */
+    private String thumbnailUrl;
+
     public static Picture objToDO(PictureUploadResult pictureUploadResult, UserVO loginUser) {
         if (pictureUploadResult == null) {
             return null;

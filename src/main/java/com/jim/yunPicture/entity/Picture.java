@@ -121,6 +121,17 @@ public class Picture {
     private Date reviewTime;
 
     /**
+     * 被压缩的图片 url
+     */
+    private String compressedUrl;
+
+    /**
+     * 缩略图片 url
+     */
+    private String thumbnailUrl;
+
+
+    /**
      * 对象转换为 VO
      * @param picture
      * @return
