@@ -1,7 +1,5 @@
 package com.jim.yunPicture.controller;
 
-import cn.hutool.bloomfilter.BitMapBloomFilter;
-import cn.hutool.bloomfilter.BloomFilterUtil;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.util.ObjectUtil;
@@ -13,6 +11,7 @@ import com.jim.yunPicture.annotation.AuthCheck;
 import com.jim.yunPicture.common.BaseResponse;
 import com.jim.yunPicture.common.RedisKey;
 import com.jim.yunPicture.common.ResultUtil;
+import com.jim.yunPicture.config.COSClientConfig;
 import com.jim.yunPicture.constant.UserConstant;
 import com.jim.yunPicture.entity.Picture;
 import com.jim.yunPicture.entity.enums.PictureReviewStatusEnum;
@@ -22,6 +21,7 @@ import com.jim.yunPicture.entity.vo.PictureVO;
 import com.jim.yunPicture.entity.vo.UserVO;
 import com.jim.yunPicture.exception.ErrorCode;
 import com.jim.yunPicture.exception.ThrowUtils;
+import com.jim.yunPicture.manage.COSManager;
 import com.jim.yunPicture.service.PictureService;
 import com.jim.yunPicture.service.UserService;
 import io.swagger.annotations.Api;
@@ -51,6 +51,11 @@ public class PictureController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private COSManager cosManager;
+
+    @Resource
+    private COSClientConfig cosClientConfig;
 
     /**
      * 上传图片
@@ -94,13 +99,16 @@ public class PictureController {
         ThrowUtils.throwIf(deleteRequest.getId() == null || deleteRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         UserVO loginUser = userService.getLoginUser(request);
         Picture picture = pictureService.getById(deleteRequest.getId());
-        ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
+        ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR, "该图片不存在");
         // 验证是否是管理员和图片用户
         ThrowUtils.throwIf(!userService.isAdmin(loginUser) &&
                         !Objects.equals(picture.getUserId(), loginUser.getId())
                 , ErrorCode.NO_AUTH_ERROR, "无操作权限");
         boolean res = pictureService.removeById(deleteRequest.getId());
         ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "删除失败");
+        String url = picture.getUrl();
+        int keyIndex = url.indexOf(cosClientConfig.getHost()) + 1 + cosClientConfig.getHost().length();
+        cosManager.deleteObject(url.substring(keyIndex));
         return ResultUtil.success(true);
     }
 
@@ -143,17 +151,19 @@ public class PictureController {
     //     List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(Picture::objToVO).collect(Collectors.toList());
     //     Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
     //     // 根据创建用户id查询用户信息
-    //     List<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toList());
+    //     Set<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toSet());
     //     Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
     //     pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
     //     pictureVOPage.setRecords(pictureVOList);
     //     return ResultUtil.success(pictureVOPage);
     // }
+
+
     @PostMapping("/getVO/page/cache")
     @ApiOperation(value = "获取图片列表")
     public BaseResponse<Page<PictureVO>> getPictureVOListByPageWithCache(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
         // 注解已验证是否登录
-        ThrowUtils.throwIf(pictureQueryRequest.getPageSize() > 100, ErrorCode.PARAMS_ERROR, "一页最大数量不能超过10");
+        ThrowUtils.throwIf(pictureQueryRequest.getPageSize() > 30, ErrorCode.PARAMS_ERROR, "一页最大数量不能超过30");
         String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
         String md5Hex = DigestUtil.md5Hex(queryCondition);
         String key = RedisKey.PICTURE_PAGE_PREFIX + md5Hex;
@@ -286,6 +296,5 @@ public class PictureController {
         ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "审核失败");
         return ResultUtil.success(true);
     }
-
 
 }

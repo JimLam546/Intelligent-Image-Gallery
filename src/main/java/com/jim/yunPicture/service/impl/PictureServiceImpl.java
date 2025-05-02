@@ -44,6 +44,7 @@ import java.io.IOException;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -150,6 +151,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         return queryWrapper;
     }
 
+
     public void fillReviewParam(Picture picture, UserVO loginUser) {
         if (userService.isAdmin(loginUser)) {
             // 管理员自动审核
@@ -250,7 +252,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             }).collect(Collectors.toList());
             Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
             // 根据创建用户id查询用户信息
-            List<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toList());
+            Set<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toSet());
             Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
             pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
             pictureVOPage.setRecords(pictureVOList);
@@ -263,6 +265,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             return ResultUtil.success(pictureVOPage);
         }
     }
+
+
 }
 
 

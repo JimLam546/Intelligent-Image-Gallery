@@ -130,6 +130,11 @@ public class Picture {
      */
     private String thumbnailUrl;
 
+    /**
+     * 存储空间id
+     */
+    private Long spaceId;
+
 
     /**
      * 对象转换为 VO

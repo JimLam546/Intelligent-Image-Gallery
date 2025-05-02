@@ -7,7 +7,6 @@ import lombok.Data;
 
 import java.util.Date;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * 图片
@@ -106,5 +105,10 @@ public class PictureVO {
      * 缩略图 url
      */
     private String thumbnailUrl;
+
+    /**
+     * 存储空间id
+     */
+    private Long spaceId;
 
 }

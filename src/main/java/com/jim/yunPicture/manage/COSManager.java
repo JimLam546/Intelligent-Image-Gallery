@@ -54,4 +54,12 @@ public class COSManager {
     public COSObject getObject(String path) {
         return cosClient.getObject(cosClientConfig.getBucketName(), path);
     }
+
+    /**
+     * 删除对象
+     * @param key 对象的路径，不包括域名
+     */
+    public void deleteObject(String key) {
+        cosClient.deleteObject(cosClientConfig.getBucketName(), key);
+    }
 }

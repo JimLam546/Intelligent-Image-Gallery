@@ -16,6 +16,6 @@ import java.io.Serializable;
 public class DeleteRequest implements Serializable {
     private static final long serialVersionUID = 1475158394333248543L;
 
-    @ApiModelProperty(value = "图片ID", required = true)
+    @ApiModelProperty(value = "ID", required = true)
     private Long id;
 }
