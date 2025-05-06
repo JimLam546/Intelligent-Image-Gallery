@@ -11,6 +11,7 @@ import com.jim.yunPicture.constant.UserConstant;
 import com.jim.yunPicture.entity.Space;
 import com.jim.yunPicture.entity.User;
 import com.jim.yunPicture.entity.request.DeleteRequest;
+import com.jim.yunPicture.entity.request.SpaceAddRequest;
 import com.jim.yunPicture.entity.request.SpaceQueryRequest;
 import com.jim.yunPicture.entity.request.SpaceUpdateRequest;
 import com.jim.yunPicture.entity.vo.SpaceVO;
@@ -44,6 +45,15 @@ public class SpaceController {
 
     @Resource
     private SpaceService spaceService;
+
+    @PostMapping("/add")
+    public BaseResponse<Boolean> addSpace(@RequestBody SpaceAddRequest spaceAddRequest, HttpServletRequest request) {
+        UserVO loginUser = userService.getLoginUser(request);
+        ThrowUtils.throwIf(ObjectUtil.isNotNull(loginUser), ErrorCode.NOT_LOGIN_ERROR);
+        Long spaceId = spaceService.addSpace(spaceAddRequest, loginUser);
+        ThrowUtils.throwIf(spaceId <= 0, ErrorCode.OPERATION_ERROR, "空间创建失败");
+        return ResultUtil.success(true);
+        }
     
     @PostMapping("/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)

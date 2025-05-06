@@ -1,18 +1,17 @@
 package com.jim.yunPicture.service.impl;
 
+import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollUtil;
-import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.text.CharSequenceUtil;
 import cn.hutool.core.util.ObjectUtil;
-import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.jim.yunPicture.entity.Space;
 import com.jim.yunPicture.entity.User;
 import com.jim.yunPicture.entity.enums.SpaceLevelEnum;
+import com.jim.yunPicture.entity.request.SpaceAddRequest;
 import com.jim.yunPicture.entity.request.SpaceQueryRequest;
-import com.jim.yunPicture.entity.vo.PictureVO;
 import com.jim.yunPicture.entity.vo.SpaceVO;
 import com.jim.yunPicture.entity.vo.UserVO;
 import com.jim.yunPicture.exception.ErrorCode;
@@ -21,11 +20,11 @@ import com.jim.yunPicture.service.SpaceService;
 import com.jim.yunPicture.mapper.SpaceMapper;
 import com.jim.yunPicture.service.UserService;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.support.TransactionTemplate;
 
-import java.util.Date;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import javax.annotation.Resource;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -37,11 +36,13 @@ import java.util.stream.Collectors;
 public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         implements SpaceService {
 
-    private final UserService userService;
+    @Resource
+    private UserService userService;
 
-    public SpaceServiceImpl(UserService userService) {
-        this.userService = userService;
-    }
+    @Resource
+    private TransactionTemplate transactionTemplate;
+
+    private final ConcurrentHashMap<Long, Object> lockMap = new ConcurrentHashMap<>();
 
     /**
      * @param space
@@ -113,6 +114,40 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         }
         if (ObjectUtil.isNull(space.getMaxCount())) {
             space.setMaxCount(enumByValue.getMaxCount());
+        }
+    }
+
+    @Override
+    public Long addSpace(SpaceAddRequest spaceAddRequest, UserVO loginUser) {
+        Space space = BeanUtil.copyProperties(spaceAddRequest, Space.class);
+        if (ObjectUtil.isNull(spaceAddRequest)) {
+            space.setSpaceLevel(SpaceLevelEnum.COMMON.getValue());
+        }
+        if (ObjectUtil.isNull(spaceAddRequest.getSpaceName())) {
+            space.setSpaceName("默认空间");
+        }
+        // 参数校验
+        this.validSpace(space, true);
+        Long userId = loginUser.getId();
+        space.setUserId(userId);
+        // 权限校验
+        ThrowUtils.throwIf(space.getSpaceLevel().equals(SpaceLevelEnum.COMMON.getValue())
+                        && !userService.isAdmin(loginUser),
+                ErrorCode.NO_AUTH_ERROR);
+
+        // 控制一个用户只能有一个私有空间
+        lockMap.putIfAbsent(userId, new Object());
+        synchronized (lockMap.get(userId)) {
+            Long spaceId = transactionTemplate.execute(status -> {
+                boolean exists = this.lambdaQuery().eq(Space::getUserId, userId)
+                        .eq(Space::getSpaceLevel, SpaceLevelEnum.COMMON.getValue()).exists();
+                ThrowUtils.throwIf(exists, ErrorCode.OPERATION_ERROR, "用户只能创建一个空间");
+
+                boolean result = this.save(space);
+                ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "空间创建失败");
+                return space.getId();
+            });
+            return Optional.ofNullable(spaceId).orElse(-1L);
         }
     }
 }

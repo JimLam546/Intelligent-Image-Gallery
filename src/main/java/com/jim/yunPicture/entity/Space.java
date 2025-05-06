@@ -20,7 +20,7 @@ public class Space {
     /**
      * id
      */
-    @TableId(type = IdType.AUTO)
+    @TableId(type = IdType.ASSIGN_UUID)
     private Long id;
 
     /**
