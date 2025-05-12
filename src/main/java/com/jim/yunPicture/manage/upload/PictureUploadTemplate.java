@@ -39,17 +39,14 @@ public abstract class PictureUploadTemplate {
     @Resource
     private COSManager cosManager;
 
-    @Value("${cos.path.uploadPath}")
-    private String UPLOAD_PATH;
-
     private static final String TEMP_FILE_PREFIX = "temp";
 
     /**
      * @param inputSource MultipartFile 或 Url-String
-     * @param loginUser
+     * @param uploadPathPrefix 上传路径
      * @return
      */
-    public PictureUploadResult uploadPicture(Object inputSource, UserVO loginUser) {
+    public PictureUploadResult uploadPicture(Object inputSource, String uploadPathPrefix) {
         // 1. 校验图片合法性
         validPicture(inputSource);
         // 2. 获取图片文件名（包含后缀）
@@ -57,7 +54,7 @@ public abstract class PictureUploadTemplate {
         String fileSuffix = FileUtil.getSuffix(originalFileName);
         String fileName = String.format("%s_%s.%s", DateUtil.format(new Date(), "yyyyMMddHHmmss"), UUID.randomUUID(), fileSuffix);
         // 上传路径 + 文件名
-        String filePath = String.format("%s/%s", UPLOAD_PATH + loginUser.getId(), fileName);
+        String filePath = String.format("%s/%s", uploadPathPrefix, fileName);
         // 3. 创建临时文件
         File file = null;
         try {

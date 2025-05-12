@@ -61,7 +61,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         // 修改时校验
         ThrowUtils.throwIf(spaceName.length() > 20, ErrorCode.PARAMS_ERROR, "空间名称不能太长");
         ThrowUtils.throwIf(ObjectUtil.isNotNull(spaceLevel)
-                        && ObjectUtil.isNotNull(SpaceLevelEnum.getEnumByValue(spaceLevel)),
+                        && ObjectUtil.isNull(SpaceLevelEnum.getEnumByValue(spaceLevel)),
                 ErrorCode.PARAMS_ERROR, "空间等级错误");
     }
 
@@ -120,16 +120,19 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     @Override
     public Long addSpace(SpaceAddRequest spaceAddRequest, UserVO loginUser) {
         Space space = BeanUtil.copyProperties(spaceAddRequest, Space.class);
-        if (ObjectUtil.isNull(spaceAddRequest)) {
+        if (ObjectUtil.isNull(spaceAddRequest.getSpaceLevel())) {
             space.setSpaceLevel(SpaceLevelEnum.COMMON.getValue());
         }
-        if (ObjectUtil.isNull(spaceAddRequest.getSpaceName())) {
+
+        if (CharSequenceUtil.isBlank(spaceAddRequest.getSpaceName())) {
             space.setSpaceName("默认空间");
         }
         // 参数校验
         this.validSpace(space, true);
         Long userId = loginUser.getId();
         space.setUserId(userId);
+        space.setMaxSize(SpaceLevelEnum.COMMON.getMaxSize());
+        space.setMaxCount(SpaceLevelEnum.COMMON.getMaxCount());
         // 权限校验
         ThrowUtils.throwIf(space.getSpaceLevel().equals(SpaceLevelEnum.COMMON.getValue())
                         && !userService.isAdmin(loginUser),
@@ -138,16 +141,21 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         // 控制一个用户只能有一个私有空间
         lockMap.putIfAbsent(userId, new Object());
         synchronized (lockMap.get(userId)) {
-            Long spaceId = transactionTemplate.execute(status -> {
-                boolean exists = this.lambdaQuery().eq(Space::getUserId, userId)
-                        .eq(Space::getSpaceLevel, SpaceLevelEnum.COMMON.getValue()).exists();
-                ThrowUtils.throwIf(exists, ErrorCode.OPERATION_ERROR, "用户只能创建一个空间");
+            try {
+                Long spaceId = transactionTemplate.execute(status -> {
+                    boolean exists = this.lambdaQuery().eq(Space::getUserId, userId)
+                            .eq(Space::getSpaceLevel, SpaceLevelEnum.COMMON.getValue()).exists();
+                    ThrowUtils.throwIf(exists, ErrorCode.OPERATION_ERROR, "用户只能创建一个空间");
 
-                boolean result = this.save(space);
-                ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "空间创建失败");
-                return space.getId();
-            });
-            return Optional.ofNullable(spaceId).orElse(-1L);
+                    boolean result = this.save(space);
+                    ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "空间创建失败");
+                    return space.getId();
+                });
+                return Optional.ofNullable(spaceId).orElse(-1L);
+            } finally {
+                // 防止报错而不清理 userId 导致内存泄漏
+                lockMap.remove(userId);
+            }
         }
     }
 }

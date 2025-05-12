@@ -49,7 +49,7 @@ public class SpaceController {
     @PostMapping("/add")
     public BaseResponse<Boolean> addSpace(@RequestBody SpaceAddRequest spaceAddRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
-        ThrowUtils.throwIf(ObjectUtil.isNotNull(loginUser), ErrorCode.NOT_LOGIN_ERROR);
+        ThrowUtils.throwIf(ObjectUtil.isNull(loginUser), ErrorCode.NOT_LOGIN_ERROR);
         Long spaceId = spaceService.addSpace(spaceAddRequest, loginUser);
         ThrowUtils.throwIf(spaceId <= 0, ErrorCode.OPERATION_ERROR, "空间创建失败");
         return ResultUtil.success(true);

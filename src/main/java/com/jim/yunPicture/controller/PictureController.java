@@ -51,12 +51,6 @@ public class PictureController {
     @Resource
     private UserService userService;
 
-    @Resource
-    private COSManager cosManager;
-
-    @Resource
-    private COSClientConfig cosClientConfig;
-
     /**
      * 上传图片
      */
@@ -96,19 +90,10 @@ public class PictureController {
     @PostMapping("/delete")
     @ApiOperation(value = "删除图片")
     public BaseResponse<Boolean> deleteById(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(deleteRequest.getId() == null || deleteRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         UserVO loginUser = userService.getLoginUser(request);
-        Picture picture = pictureService.getById(deleteRequest.getId());
-        ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR, "该图片不存在");
-        // 验证是否是管理员和图片用户
-        ThrowUtils.throwIf(!userService.isAdmin(loginUser) &&
-                        !Objects.equals(picture.getUserId(), loginUser.getId())
-                , ErrorCode.NO_AUTH_ERROR, "无操作权限");
-        boolean res = pictureService.removeById(deleteRequest.getId());
-        ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "删除失败");
-        String url = picture.getUrl();
-        int keyIndex = url.indexOf(cosClientConfig.getHost()) + 1 + cosClientConfig.getHost().length();
-        cosManager.deleteObject(url.substring(keyIndex));
+        Picture oldPicture = pictureService.deletePicture(deleteRequest, loginUser);
+        // 异步删除云文件
+        pictureService.clearPictureFile(oldPicture);
         return ResultUtil.success(true);
     }
 

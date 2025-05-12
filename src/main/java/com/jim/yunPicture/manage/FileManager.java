@@ -41,7 +41,7 @@ public class FileManager {
     @Resource
     private COSClientConfig cosClientConfig;
 
-    @Value("${cos.path.uploadPath}")
+    // @Value("${cos.path.uploadPath}")
     private String UPLOAD_PATH;
 
     private static final String TEMP_FILE_PREFIX = "temp";

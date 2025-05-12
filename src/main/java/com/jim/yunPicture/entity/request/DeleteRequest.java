@@ -18,4 +18,7 @@ public class DeleteRequest implements Serializable {
 
     @ApiModelProperty(value = "ID", required = true)
     private Long id;
+
+    @ApiModelProperty(value = "空间ID")
+    private Long spaceId;
 }

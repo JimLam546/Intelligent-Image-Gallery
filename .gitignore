@@ -1,6 +1,7 @@
 src/main/resources/application-local.yml
 
 HELP.md
+补充.md
 target/
 !.mvn/wrapper/maven-wrapper.jar
 !**/src/main/**/target/
