@@ -52,6 +52,7 @@ import java.util.Date;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -94,6 +95,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Resource
     private TransactionTemplate transactionTemplate;
+
+    private static final ConcurrentHashMap<String, Object> lockMap = new ConcurrentHashMap<>();
 
     /**
      * 上传图片
@@ -288,38 +291,45 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             return ResultUtil.success(cachedPage);
         }
         // 防止缓存击穿
-        synchronized (key.intern()) {
-            String cachedPageStr = redisTemplate.opsForValue().get(key);
-            String localCachedPageStr = localCache.getIfPresent(key);
-            if (ObjectUtil.isNotNull(cachedPageStr) && ObjectUtil.isNotNull(localCachedPageStr)) {
-                return ResultUtil.success(localCachedPage);
-            }
-            Page<Picture> page = new Page<>(current, pageSize);
-            QueryWrapper<Picture> queryWrapper = this.getQueryWrapper(pictureQueryRequest);
-            // 默认展示审核通过数据
-            queryWrapper.lambda().eq(Picture::getReviewStatus, PictureReviewStatusEnum.PASS.getValue());
-            Page<Picture> picturePage = this.page(page, queryWrapper);
-            List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(picture -> {
-                // 返回压缩后的图片Url
-                PictureVO pictureVO = Picture.objToVO(picture);
-                if (ObjectUtil.isNotNull(picture.getThumbnailUrl())) {
-                    pictureVO.setUrl(picture.getThumbnailUrl());
+        lockMap.putIfAbsent(key, new Object());
+        synchronized (lockMap.get(key)) {
+            try {
+                String cachedPageStr = redisTemplate.opsForValue().get(key);
+                String localCachedPageStr = localCache.getIfPresent(key);
+                // 如果两者中其中一个为空，就进行查询
+                if (ObjectUtil.isNotNull(cachedPageStr) && ObjectUtil.isNotNull(localCachedPageStr)) {
+                    return ResultUtil.success(localCachedPage);
                 }
-                return pictureVO;
-            }).collect(Collectors.toList());
-            Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
-            // 根据创建用户id查询用户信息
-            Set<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toSet());
-            Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
-            pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
-            pictureVOPage.setRecords(pictureVOList);
-            // 设置随机过期时间
-            int randomSeconds = 300 + RandomUtil.randomInt(0, 300);
-            String pageJsonStr = JSONUtil.toJsonStr(pictureVOPage);
-            // 将查询结果写入 redis 和 caffeine
-            redisTemplate.opsForValue().set(key, pageJsonStr, randomSeconds, TimeUnit.SECONDS);
-            localCache.put(key, pageJsonStr);
-            return ResultUtil.success(pictureVOPage);
+                Page<Picture> page = new Page<>(current, pageSize);
+                QueryWrapper<Picture> queryWrapper = this.getQueryWrapper(pictureQueryRequest);
+                // 默认展示审核通过数据
+                queryWrapper.lambda().eq(Picture::getReviewStatus, PictureReviewStatusEnum.PASS.getValue())
+                        .isNull(Picture::getSpaceId);
+                Page<Picture> picturePage = this.page(page, queryWrapper);
+                List<PictureVO> pictureVOList = picturePage.getRecords().stream().map(picture -> {
+                    // 返回压缩后的图片Url
+                    PictureVO pictureVO = Picture.objToVO(picture);
+                    if (ObjectUtil.isNotNull(picture.getThumbnailUrl())) {
+                        pictureVO.setUrl(picture.getThumbnailUrl());
+                    }
+                    return pictureVO;
+                }).collect(Collectors.toList());
+                Page<PictureVO> pictureVOPage = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
+                // 根据创建用户id查询用户信息
+                Set<Long> idList = pictureVOList.stream().map(PictureVO::getUserId).collect(Collectors.toSet());
+                Map<Long, List<UserVO>> idListMap = userService.listByIds(idList).stream().map(User::objToVO).collect(Collectors.groupingBy(UserVO::getId));
+                pictureVOList.forEach(pictureVO -> pictureVO.setUser(idListMap.get(pictureVO.getUserId()).get(0)));
+                pictureVOPage.setRecords(pictureVOList);
+                // 设置随机过期时间
+                int randomSeconds = 300 + RandomUtil.randomInt(0, 300);
+                String pageJsonStr = JSONUtil.toJsonStr(pictureVOPage);
+                // 将查询结果写入 redis 和 caffeine
+                redisTemplate.opsForValue().set(key, pageJsonStr, randomSeconds, TimeUnit.SECONDS);
+                localCache.put(key, pageJsonStr);
+                return ResultUtil.success(pictureVOPage);
+            } finally {
+                lockMap.remove(key);
+            }
         }
     }
 
@@ -366,21 +376,28 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Async
     @Override
     public void clearPictureFile(Picture oldPicture) {
+        Long count = this.lambdaQuery()
+                .eq(Picture::getUrl, oldPicture.getUrl())
+                .count();
+        if (count > 1) return;
         // 删除原图
-        cosManager.deleteObject(oldPicture.getUrl());
+        cosManager.deleteObject(getPictureUrlKey(oldPicture.getUrl()));
         String thumbnailUrl = oldPicture.getThumbnailUrl();
         if (CharSequenceUtil.isNotBlank(thumbnailUrl)) {
             // 删除缩略图
-            cosManager.deleteObject(thumbnailUrl);
+            cosManager.deleteObject(getPictureUrlKey(thumbnailUrl));
         }
         String compressedUrl = oldPicture.getCompressedUrl();
         if (CharSequenceUtil.isNotBlank(compressedUrl)) {
             // 删除压缩图
-            cosManager.deleteObject(compressedUrl);
+            cosManager.deleteObject(getPictureUrlKey(compressedUrl));
         }
     }
 
-
+    private String getPictureUrlKey(String url) {
+        int index = url.indexOf(cosClientConfig.getHost()) + 1 + cosClientConfig.getHost().length();
+        return url.substring(index);
+    }
 }
 
 

@@ -169,9 +169,13 @@ public class PictureController {
     public BaseResponse<PictureVO> getPictureVOById(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(pictureQueryRequest.getId() == null || pictureQueryRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         // 验证是否登录
-        userService.getLoginUser(request);
         Picture picture = pictureService.getById(pictureQueryRequest.getId());
         ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
+        Long spaceId = picture.getSpaceId();
+        if (ObjectUtil.isNotNull(spaceId)) {
+            UserVO loginUser = userService.getLoginUser(request);
+            pictureService.checkPictureAuth(picture, loginUser);
+        }
         PictureVO pictureVO = Picture.objToVO(picture);
         return ResultUtil.success(pictureVO);
     }
@@ -231,8 +235,8 @@ public class PictureController {
     @PostMapping("/edit")
     @ApiOperation(value = "编辑图片信息")
     public BaseResponse<Boolean> editPictureById(@RequestBody PictureEditRequest pictureEditRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(pictureEditRequest.getId() == null || pictureEditRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         UserVO loginUser = userService.getLoginUser(request);
+        ThrowUtils.throwIf(pictureEditRequest.getId() == null || pictureEditRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         Picture picture = new Picture();
         CopyOptions copyOptions = CopyOptions.create().setIgnoreProperties("tags");
         BeanUtil.copyProperties(pictureEditRequest, picture, copyOptions);
@@ -245,10 +249,7 @@ public class PictureController {
         Picture oldPicture = pictureService.getById(pictureEditRequest.getId());
         ThrowUtils.throwIf(ObjectUtil.isNull(oldPicture), ErrorCode.NOT_FOUND_ERROR, "图片不存在");
         // 判断是否为管理员或所属用户
-        ThrowUtils.throwIf(
-                ObjectUtil.notEqual(UserRoleEnum.ADMIN.getValue(), loginUser.getUserRole())
-                        && ObjectUtil.notEqual(loginUser.getId(), oldPicture.getUserId()),
-                ErrorCode.OPERATION_ERROR, "无权限");
+        pictureService.checkPictureAuth(picture, loginUser);
         // 操作数据库
         boolean res = pictureService.updateById(picture);
         ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "更新失败");
