@@ -21,10 +21,10 @@ knife4j:
     version: 1.0
     group:
       test1:
-        group-name: 默认分组
+        group-name: picture-api
         api-rule: package
         api-rule-resources:
-          - com.jim.yunPicture.controller
+          - com.jim.yun_picture.controller
 mybatis-plus:
   global-config:
     db-config:

@@ -162,7 +162,7 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
                 <version>${spring-boot.version}</version>
                 <configuration>
-                    <mainClass>com.jim.yunPicture.UniversalTemplatesApplication</mainClass>
+                    <mainClass>com.jim.yun_picture.YunPictureApplication</mainClass>
                     <skip>true</skip>
                 </configuration>
                 <executions>
