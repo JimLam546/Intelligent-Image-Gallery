@@ -37,6 +37,11 @@ public class UserVO implements Serializable {
     private Integer gender;
 
     /**
+     * 空间ID
+     */
+    private Long spaceId;
+
+    /**
      * 电话
      */
     private String phone;

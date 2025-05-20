@@ -2,15 +2,16 @@ package com.jim.yun_picture.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.jim.yun_picture.api.aliyunai.entity.CreateOutPaintingTaskResponse;
+import com.jim.yun_picture.api.aliyunai.entity.CreatePictureOutPaintingTaskRequest;
 import com.jim.yun_picture.common.BaseResponse;
 import com.jim.yun_picture.entity.Picture;
 import com.baomidou.mybatisplus.extension.service.IService;
-import com.jim.yun_picture.entity.request.DeleteRequest;
-import com.jim.yun_picture.entity.request.PictureQueryRequest;
-import com.jim.yun_picture.entity.request.PictureUploadByBatchRequest;
-import com.jim.yun_picture.entity.request.PictureUploadRequest;
+import com.jim.yun_picture.entity.request.*;
 import com.jim.yun_picture.entity.vo.PictureVO;
 import com.jim.yun_picture.entity.vo.UserVO;
+
+import javax.servlet.http.HttpServletRequest;
 
 /**
 * @author Jim_Lam
@@ -35,4 +36,8 @@ public interface PictureService extends IService<Picture> {
     Picture deletePicture(DeleteRequest deleteRequest, UserVO loginUser);
 
     void clearPictureFile(Picture oldPicture);
+
+    void editPictureBatch(PictureEditByBatchRequest pictureEditBatchRequest, UserVO loginUser);
+
+    CreateOutPaintingTaskResponse createPictureOutPaintingTask(CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest, UserVO loginUser);
 }

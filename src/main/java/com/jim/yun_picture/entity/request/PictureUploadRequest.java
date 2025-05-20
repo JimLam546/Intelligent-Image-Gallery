@@ -5,6 +5,7 @@ import io.swagger.annotations.ApiModelProperty;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * @author Jim_Lam
@@ -16,8 +17,11 @@ import java.io.Serializable;
 public class PictureUploadRequest implements Serializable {
     private static final long serialVersionUID = 6130577646817127944L;
 
-    @ApiModelProperty(value = "图片名称")
+    @ApiModelProperty(value = "图片ID")
     private Long id;
+
+    @ApiModelProperty(value = "图片名称")
+    private String name;
 
     /**
      * 文件地址
@@ -28,6 +32,6 @@ public class PictureUploadRequest implements Serializable {
     /**
      * 空间id
      */
-    @ApiModelProperty
+    @ApiModelProperty("空间ID")
     private Long spaceId;
 }

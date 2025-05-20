@@ -58,6 +58,11 @@ public class User implements Serializable {
     private String email;
 
     /**
+     * 空间ID
+     */
+    private Long spaceId;
+
+    /**
      * 是否有效(是否被封号)
      */
     private Integer isValid;

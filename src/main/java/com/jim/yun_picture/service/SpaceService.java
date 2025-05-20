@@ -2,6 +2,7 @@ package com.jim.yun_picture.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
+import com.jim.yun_picture.entity.Picture;
 import com.jim.yun_picture.entity.Space;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.jim.yun_picture.entity.request.SpaceAddRequest;
@@ -24,4 +25,8 @@ public interface SpaceService extends IService<Space> {
     void fileSpaceBySpaceLevel(Space space);
 
     Long addSpace(SpaceAddRequest spaceAddRequest, UserVO loginUser);
+
+    Space checkSpaceCapacity(Long spaceId);
+
+    boolean updateSpaceCapacity(Space space, Picture picture);
 }

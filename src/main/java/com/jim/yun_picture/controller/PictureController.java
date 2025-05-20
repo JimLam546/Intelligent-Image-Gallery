@@ -2,27 +2,37 @@ package com.jim.yun_picture.controller;
 
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.bean.copier.CopyOptions;
+import cn.hutool.core.text.CharSequenceUtil;
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.xiaoymin.knife4j.annotations.ApiSupport;
 import com.jim.yun_picture.annotation.AuthCheck;
+import com.jim.yun_picture.api.aliyunai.AliYunAiApi;
+import com.jim.yun_picture.api.aliyunai.entity.CreateOutPaintingTaskResponse;
+import com.jim.yun_picture.api.aliyunai.entity.CreatePictureOutPaintingTaskRequest;
+import com.jim.yun_picture.api.aliyunai.entity.GetOutPaintingTaskResponse;
 import com.jim.yun_picture.common.BaseResponse;
 import com.jim.yun_picture.common.RedisKey;
 import com.jim.yun_picture.common.ResultUtil;
 import com.jim.yun_picture.constant.UserConstant;
 import com.jim.yun_picture.entity.Picture;
+import com.jim.yun_picture.entity.Space;
 import com.jim.yun_picture.entity.enums.PictureReviewStatusEnum;
 import com.jim.yun_picture.entity.request.*;
 import com.jim.yun_picture.entity.vo.PictureVO;
 import com.jim.yun_picture.entity.vo.UserVO;
+import com.jim.yun_picture.exception.BusinessException;
 import com.jim.yun_picture.exception.ErrorCode;
 import com.jim.yun_picture.exception.ThrowUtils;
 import com.jim.yun_picture.service.PictureService;
+import com.jim.yun_picture.service.SpaceService;
 import com.jim.yun_picture.service.UserService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -47,12 +57,18 @@ public class PictureController {
     @Resource
     private UserService userService;
 
+    @Resource
+    private SpaceService spaceService;
+
+    @Resource
+    private AliYunAiApi aliYunAiApi;
+
     /**
      * 上传图片
      */
     @PostMapping("/upload")
     @ApiOperation(value = "上传图片")
-    public BaseResponse<PictureVO> uploadPicture(@RequestPart("file") MultipartFile file, PictureUploadRequest uploadRequest, HttpServletRequest request) {
+    public BaseResponse<PictureVO> uploadPicture(@RequestPart(value = "file") MultipartFile file, PictureUploadRequest uploadRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
         PictureVO pictureVO = pictureService.uploadPicture(file, uploadRequest, loginUser);
         return ResultUtil.success(pictureVO);
@@ -138,12 +154,9 @@ public class PictureController {
     //     pictureVOPage.setRecords(pictureVOList);
     //     return ResultUtil.success(pictureVOPage);
     // }
-
-
     @PostMapping("/getVO/page/cache")
     @ApiOperation(value = "获取图片列表")
-    public BaseResponse<Page<PictureVO>> getPictureVOListByPageWithCache(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
-        // 注解已验证是否登录
+    public BaseResponse<Page<PictureVO>> getPictureVOListByPageWithCache(@RequestBody PictureQueryRequest pictureQueryRequest) {
         ThrowUtils.throwIf(pictureQueryRequest.getPageSize() > 30, ErrorCode.PARAMS_ERROR, "一页最大数量不能超过30");
         String queryCondition = JSONUtil.toJsonStr(pictureQueryRequest);
         String md5Hex = DigestUtil.md5Hex(queryCondition);
@@ -204,9 +217,10 @@ public class PictureController {
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @ApiOperation(value = "修改图片信息（管理员）")
     public BaseResponse<Boolean> updateById(@RequestBody PictureUpdateRequest pictureUpdateRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(pictureUpdateRequest.getId() == null || pictureUpdateRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
+        Long id = pictureUpdateRequest.getId();
+        ThrowUtils.throwIf(ObjectUtil.isNotNull(id) || id <= 0, ErrorCode.PARAMS_ERROR);
         UserVO loginUser = userService.getLoginUser(request);
-        Picture picture = pictureService.getById(pictureUpdateRequest.getId());
+        Picture picture = pictureService.getById(id);
         ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
         CopyOptions copyOptions = CopyOptions.create().setIgnoreProperties("tags");
         BeanUtil.copyProperties(pictureUpdateRequest, picture, copyOptions);
@@ -230,10 +244,15 @@ public class PictureController {
      */
     @PostMapping("/edit")
     @ApiOperation(value = "编辑图片信息")
+    @Transactional(rollbackFor = Exception.class)
     public BaseResponse<Boolean> editPictureById(@RequestBody PictureEditRequest pictureEditRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
         ThrowUtils.throwIf(pictureEditRequest.getId() == null || pictureEditRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
+        // 检查图片是否存在
+        Picture oldPicture = pictureService.getById(pictureEditRequest.getId());
+        ThrowUtils.throwIf(ObjectUtil.isNull(oldPicture), ErrorCode.NOT_FOUND_ERROR, "图片不存在");
         Picture picture = new Picture();
+        picture.setUserId(loginUser.getId());
         CopyOptions copyOptions = CopyOptions.create().setIgnoreProperties("tags");
         BeanUtil.copyProperties(pictureEditRequest, picture, copyOptions);
         // 数据校验
@@ -242,13 +261,22 @@ public class PictureController {
         picture.setTags(JSONUtil.toJsonStr(pictureEditRequest.getTags()));
         // 填充审核参数
         pictureService.fillReviewParam(picture, loginUser);
-        Picture oldPicture = pictureService.getById(pictureEditRequest.getId());
-        ThrowUtils.throwIf(ObjectUtil.isNull(oldPicture), ErrorCode.NOT_FOUND_ERROR, "图片不存在");
         // 判断是否为管理员或所属用户
         pictureService.checkPictureAuth(picture, loginUser);
         // 操作数据库
         boolean res = pictureService.updateById(picture);
         ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "更新失败");
+        // 更新私有空间大小
+        Long spaceId = pictureEditRequest.getSpaceId();
+        if (ObjectUtil.isNotNull(spaceId)) {
+            // 检查私有空间容量是否足够
+            Space space = spaceService.checkSpaceCapacity(spaceId);
+            // 空间足够
+            // 传递图片的大小
+            Picture newPicture = pictureService.getById(picture.getId());
+            boolean updated = spaceService.updateSpaceCapacity(space, newPicture);
+            ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "更新失败");
+        }
         return ResultUtil.success(true);
     }
 
@@ -277,6 +305,41 @@ public class PictureController {
         boolean res = pictureService.updateById(picture);
         ThrowUtils.throwIf(!res, ErrorCode.OPERATION_ERROR, "审核失败");
         return ResultUtil.success(true);
+    }
+
+    @PostMapping("/edit/batch")
+    @ApiOperation(value = "批量编辑图片信息")
+    public BaseResponse<Boolean> editPictureBatch(@RequestBody PictureEditByBatchRequest pictureEditBatchRequest, HttpServletRequest request) {
+        UserVO loginUser = userService.getLoginUser(request);
+        pictureService.editPictureBatch(pictureEditBatchRequest, loginUser);
+        return ResultUtil.success(true);
+    }
+
+    /**
+     * 创建 AI 扩图任务
+     */
+    @PostMapping("/out_painting/create_task")
+    @ApiOperation(value = "创建 AI 扩图任务")
+    public BaseResponse<CreateOutPaintingTaskResponse> createPictureOutPaintingTask(
+            @RequestBody CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest,
+            HttpServletRequest request) {
+        if (createPictureOutPaintingTaskRequest.getPictureId() == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        UserVO loginUser = userService.getLoginUser(request);
+        CreateOutPaintingTaskResponse response = pictureService.createPictureOutPaintingTask(createPictureOutPaintingTaskRequest, loginUser);
+        return ResultUtil.success(response);
+    }
+
+    /**
+     * 查询 AI 扩图任务
+     */
+    @GetMapping("/out_painting/get_task")
+    @ApiOperation(value = "查询 AI 扩图任务")
+    public BaseResponse<GetOutPaintingTaskResponse> getPictureOutPaintingTask(String taskId) {
+        ThrowUtils.throwIf(CharSequenceUtil.isBlank(taskId), ErrorCode.PARAMS_ERROR);
+        GetOutPaintingTaskResponse task = aliYunAiApi.getOutPaintingTask(taskId);
+        return ResultUtil.success(task);
     }
 
 }

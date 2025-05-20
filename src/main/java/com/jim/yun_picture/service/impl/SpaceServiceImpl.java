@@ -7,6 +7,7 @@ import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.jim.yun_picture.entity.Picture;
 import com.jim.yun_picture.entity.Space;
 import com.jim.yun_picture.entity.User;
 import com.jim.yun_picture.entity.enums.SpaceLevelEnum;
@@ -143,12 +144,14 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         synchronized (lockMap.get(userId)) {
             try {
                 Long spaceId = transactionTemplate.execute(status -> {
+                    // 后面验证可以换成检查用户表是否存在 spaceId
                     boolean exists = this.lambdaQuery().eq(Space::getUserId, userId)
                             .eq(Space::getSpaceLevel, SpaceLevelEnum.COMMON.getValue()).exists();
                     ThrowUtils.throwIf(exists, ErrorCode.OPERATION_ERROR, "用户只能创建一个空间");
-
                     boolean result = this.save(space);
                     ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "空间创建失败");
+                    boolean update = userService.lambdaUpdate().eq(User::getId, userId).set(User::getSpaceId, space.getId()).update();
+                    ThrowUtils.throwIf(!update, ErrorCode.OPERATION_ERROR, "空间关联用户失败");
                     return space.getId();
                 });
                 return Optional.ofNullable(spaceId).orElse(-1L);
@@ -157,6 +160,29 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
                 lockMap.remove(userId);
             }
         }
+    }
+
+    @Override
+    public Space checkSpaceCapacity(Long spaceId) {
+        Space space = this.getById(spaceId);
+        ThrowUtils.throwIf(ObjectUtil.isNull(space), ErrorCode.NOT_FOUND_ERROR, "空间不存在");
+        // 检验额度
+        ThrowUtils.throwIf(space.getTotalCount() >= space.getMaxCount(),
+                ErrorCode.OPERATION_ERROR, "空间文件数量已达上限");
+        ThrowUtils.throwIf(space.getTotalSize() >= space.getMaxSize(),
+                ErrorCode.OPERATION_ERROR, "空间内存大小已达上限");
+        return space;
+    }
+
+    @Override
+    public boolean updateSpaceCapacity(Space oldSpace, Picture picture) {
+        // 判断空间大小是否足够放下
+        Space space = new Space();
+        space.setId(oldSpace.getId());
+        space.setTotalCount(oldSpace.getTotalCount() + 1);
+        space.setTotalSize(oldSpace.getTotalSize() + picture.getPicSize());
+        this.updateById(space);
+        return true;
     }
 }
 
