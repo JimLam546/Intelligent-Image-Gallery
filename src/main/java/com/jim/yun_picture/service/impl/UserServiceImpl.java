@@ -10,6 +10,7 @@ import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.DigestUtil;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.jim.yun_picture.entity.Picture;
 import com.jim.yun_picture.entity.User;
 import com.jim.yun_picture.entity.enums.UserRoleEnum;
 import com.jim.yun_picture.entity.request.UserQueryRequest;
@@ -17,10 +18,13 @@ import com.jim.yun_picture.entity.vo.UserVO;
 import com.jim.yun_picture.exception.BusinessException;
 import com.jim.yun_picture.exception.ErrorCode;
 import com.jim.yun_picture.exception.ThrowUtils;
+import com.jim.yun_picture.service.PictureService;
 import com.jim.yun_picture.service.UserService;
 import com.jim.yun_picture.mapper.UserMapper;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 
 import static com.jim.yun_picture.constant.UserConstant.USER_LOGIN_STATE;
