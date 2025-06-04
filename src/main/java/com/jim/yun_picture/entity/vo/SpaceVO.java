@@ -1,5 +1,7 @@
 package com.jim.yun_picture.entity.vo;
 
+import cn.hutool.core.bean.BeanUtil;
+import com.jim.yun_picture.entity.Space;
 import lombok.Data;
 
 import java.io.Serializable;
@@ -13,6 +15,9 @@ import java.io.Serializable;
 public class SpaceVO implements Serializable {
 
     private static final long serialVersionUID = 8218313928319228958L;
+
+    private Long id;
+
     /**
      * 空间名称
      */
@@ -52,5 +57,4 @@ public class SpaceVO implements Serializable {
      * 创建用户信息
      */
     private UserVO user;
-
 }

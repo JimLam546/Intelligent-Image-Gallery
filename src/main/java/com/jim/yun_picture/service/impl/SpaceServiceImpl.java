@@ -11,6 +11,7 @@ import com.jim.yun_picture.entity.Picture;
 import com.jim.yun_picture.entity.Space;
 import com.jim.yun_picture.entity.User;
 import com.jim.yun_picture.entity.enums.SpaceLevelEnum;
+import com.jim.yun_picture.entity.enums.SpaceTypeEnum;
 import com.jim.yun_picture.entity.request.SpaceAddRequest;
 import com.jim.yun_picture.entity.request.SpaceQueryRequest;
 import com.jim.yun_picture.entity.vo.SpaceVO;
@@ -128,6 +129,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         if (CharSequenceUtil.isBlank(spaceAddRequest.getSpaceName())) {
             space.setSpaceName("默认空间");
         }
+
         // 参数校验
         this.validSpace(space, true);
         Long userId = loginUser.getId();
@@ -152,6 +154,9 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
                     ThrowUtils.throwIf(!result, ErrorCode.OPERATION_ERROR, "空间创建失败");
                     boolean update = userService.lambdaUpdate().eq(User::getId, userId).set(User::getSpaceId, space.getId()).update();
                     ThrowUtils.throwIf(!update, ErrorCode.OPERATION_ERROR, "空间关联用户失败");
+                    if (SpaceTypeEnum.TEAM.getValue() == spaceAddRequest.getSpaceType()) {
+
+                    }
                     return space.getId();
                 });
                 return Optional.ofNullable(spaceId).orElse(-1L);

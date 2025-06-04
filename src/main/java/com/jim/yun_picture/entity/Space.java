@@ -59,6 +59,11 @@ public class Space {
     private Long userId;
 
     /**
+     * 空间类型：0-私有空间 1-团队空间
+     */
+    private Integer spaceType;
+
+    /**
      * 创建时间
      */
     private Date createTime;
