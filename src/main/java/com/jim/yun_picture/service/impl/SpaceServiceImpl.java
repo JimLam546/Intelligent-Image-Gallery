@@ -9,8 +9,10 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.jim.yun_picture.entity.Picture;
 import com.jim.yun_picture.entity.Space;
+import com.jim.yun_picture.entity.SpaceUser;
 import com.jim.yun_picture.entity.User;
 import com.jim.yun_picture.entity.enums.SpaceLevelEnum;
+import com.jim.yun_picture.entity.enums.SpaceRoleEnum;
 import com.jim.yun_picture.entity.enums.SpaceTypeEnum;
 import com.jim.yun_picture.entity.request.SpaceAddRequest;
 import com.jim.yun_picture.entity.request.SpaceQueryRequest;
@@ -20,7 +22,9 @@ import com.jim.yun_picture.exception.ErrorCode;
 import com.jim.yun_picture.exception.ThrowUtils;
 import com.jim.yun_picture.service.SpaceService;
 import com.jim.yun_picture.mapper.SpaceMapper;
+import com.jim.yun_picture.service.SpaceUserService;
 import com.jim.yun_picture.service.UserService;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -45,6 +49,9 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     private TransactionTemplate transactionTemplate;
 
     private final ConcurrentHashMap<Long, Object> lockMap = new ConcurrentHashMap<>();
+
+    @Resource
+    private SpaceUserService spaceUserService;
 
     /**
      * @param space
@@ -141,7 +148,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
                         && !userService.isAdmin(loginUser),
                 ErrorCode.NO_AUTH_ERROR);
 
-        // 控制一个用户只能有一个私有空间
+        // 控制一个用户只能有一个空间
         lockMap.putIfAbsent(userId, new Object());
         synchronized (lockMap.get(userId)) {
             try {
@@ -155,7 +162,13 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
                     boolean update = userService.lambdaUpdate().eq(User::getId, userId).set(User::getSpaceId, space.getId()).update();
                     ThrowUtils.throwIf(!update, ErrorCode.OPERATION_ERROR, "空间关联用户失败");
                     if (SpaceTypeEnum.TEAM.getValue() == spaceAddRequest.getSpaceType()) {
-
+                        // 如果是创建团队空间则添加团队成员记录
+                        SpaceUser spaceUser = new SpaceUser();
+                        spaceUser.setSpaceId(space.getId());
+                        spaceUser.setUserId(userId);
+                        spaceUser.setSpaceRole(SpaceRoleEnum.ADMIN.getValue());
+                        boolean save = spaceUserService.save(spaceUser);
+                        ThrowUtils.throwIf(!save, ErrorCode.OPERATION_ERROR, "创建空间关联创建用户失败");
                     }
                     return space.getId();
                 });
