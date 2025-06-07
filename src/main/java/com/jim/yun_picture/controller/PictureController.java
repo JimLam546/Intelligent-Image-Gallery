@@ -26,12 +26,13 @@ import com.jim.yun_picture.entity.vo.UserVO;
 import com.jim.yun_picture.exception.BusinessException;
 import com.jim.yun_picture.exception.ErrorCode;
 import com.jim.yun_picture.exception.ThrowUtils;
+import com.jim.yun_picture.manage.auth.annotation.SaSpaceCheckPermission;
+import com.jim.yun_picture.manage.auth.model.SpaceUserPermissionConstant;
 import com.jim.yun_picture.service.PictureService;
 import com.jim.yun_picture.service.SpaceService;
 import com.jim.yun_picture.service.UserService;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
@@ -68,6 +69,7 @@ public class PictureController {
      */
     @PostMapping("/upload")
     @ApiOperation(value = "上传图片")
+    @SaSpaceCheckPermission(value = SpaceUserPermissionConstant.PICTURE_UPLOAD)
     public BaseResponse<PictureVO> uploadPicture(@RequestPart(value = "file") MultipartFile file, PictureUploadRequest uploadRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
         PictureVO pictureVO = pictureService.uploadPicture(file, uploadRequest, loginUser);
@@ -76,6 +78,7 @@ public class PictureController {
 
     @PostMapping("/upload/url")
     @ApiOperation(value = "上传图片(URL)")
+    @SaSpaceCheckPermission(value = SpaceUserPermissionConstant.PICTURE_UPLOAD)
     public BaseResponse<PictureVO> uploadPictureByUrl(@RequestBody PictureUploadRequest pictureUploadRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
         String fileUrl = pictureUploadRequest.getFileUrl();
@@ -101,6 +104,7 @@ public class PictureController {
      */
     @PostMapping("/delete")
     @ApiOperation(value = "删除图片")
+    @SaSpaceCheckPermission(value = SpaceUserPermissionConstant.PICTURE_DELETE)
     public BaseResponse<Boolean> deleteById(@RequestBody DeleteRequest deleteRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
         Picture oldPicture = pictureService.deletePicture(deleteRequest, loginUser);
@@ -127,13 +131,13 @@ public class PictureController {
         return ResultUtil.success(picturePage);
     }
 
-    /**
-     * 获取图片列表（非管理员）
-     *
-     * @param pictureQueryRequest
-     * @param request
-     * @return 返回脱敏图片信息列
-     */
+    // /**
+    //  * 获取图片列表（非管理员）
+    //  *
+    //  * @param pictureQueryRequest
+    //  * @param request
+    //  * @return 返回脱敏图片信息列
+    //  */
     // @PostMapping("/getVO/page")
     // @ApiOperation(value = "获取图片列表")
     // public BaseResponse<Page<PictureVO>> getPictureVOListByPage(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
@@ -176,15 +180,13 @@ public class PictureController {
     @PostMapping("/get/vo")
     @ApiOperation(value = "获取图片信息")
     public BaseResponse<PictureVO> getPictureVOById(@RequestBody PictureQueryRequest pictureQueryRequest, HttpServletRequest request) {
-        ThrowUtils.throwIf(pictureQueryRequest.getId() == null || pictureQueryRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(pictureQueryRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         // 验证是否登录
         Picture picture = pictureService.getById(pictureQueryRequest.getId());
         ThrowUtils.throwIf(picture == null, ErrorCode.NOT_FOUND_ERROR, "图片不存在");
-        Long spaceId = picture.getSpaceId();
-        if (ObjectUtil.isNotNull(spaceId)) {
-            UserVO loginUser = userService.getLoginUser(request);
-            pictureService.checkPictureAuth(picture, loginUser);
-        }
+        UserVO loginUser = userService.getLoginUser(request);
+        // 校验是否有权限
+        pictureService.checkPictureAuth(picture, loginUser);
         PictureVO pictureVO = Picture.objToVO(picture);
         return ResultUtil.success(pictureVO);
     }
@@ -244,6 +246,7 @@ public class PictureController {
      */
     @PostMapping("/edit")
     @ApiOperation(value = "编辑图片信息")
+    @SaSpaceCheckPermission(value = SpaceUserPermissionConstant.PICTURE_EDIT)
     @Transactional(rollbackFor = Exception.class)
     public BaseResponse<Boolean> editPictureById(@RequestBody PictureEditRequest pictureEditRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
@@ -309,6 +312,7 @@ public class PictureController {
 
     @PostMapping("/edit/batch")
     @ApiOperation(value = "批量编辑图片信息")
+    @SaSpaceCheckPermission(value = SpaceUserPermissionConstant.PICTURE_EDIT)
     public BaseResponse<Boolean> editPictureBatch(@RequestBody PictureEditByBatchRequest pictureEditBatchRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
         pictureService.editPictureBatch(pictureEditBatchRequest, loginUser);
@@ -320,6 +324,7 @@ public class PictureController {
      */
     @PostMapping("/out_painting/create_task")
     @ApiOperation(value = "创建 AI 扩图任务")
+    @SaSpaceCheckPermission(value = SpaceUserPermissionConstant.PICTURE_EDIT)
     public BaseResponse<CreateOutPaintingTaskResponse> createPictureOutPaintingTask(
             @RequestBody CreatePictureOutPaintingTaskRequest createPictureOutPaintingTaskRequest,
             HttpServletRequest request) {
@@ -336,6 +341,7 @@ public class PictureController {
      */
     @GetMapping("/out_painting/get_task")
     @ApiOperation(value = "查询 AI 扩图任务")
+    @SaSpaceCheckPermission(value = SpaceUserPermissionConstant.PICTURE_EDIT)
     public BaseResponse<GetOutPaintingTaskResponse> getPictureOutPaintingTask(String taskId) {
         ThrowUtils.throwIf(CharSequenceUtil.isBlank(taskId), ErrorCode.PARAMS_ERROR);
         GetOutPaintingTaskResponse task = aliYunAiApi.getOutPaintingTask(taskId);

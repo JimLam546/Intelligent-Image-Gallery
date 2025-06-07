@@ -29,4 +29,6 @@ public interface SpaceService extends IService<Space> {
     Space checkSpaceCapacity(Long spaceId);
 
     boolean updateSpaceCapacity(Space space, Picture picture);
+
+    SpaceVO getSpaceVO(Space space, UserVO loginUser);
 }

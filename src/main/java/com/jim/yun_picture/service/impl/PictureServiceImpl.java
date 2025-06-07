@@ -116,6 +116,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Space space = null;
         if (ObjectUtil.isNotNull(spaceId)) {
             spaceService.checkSpaceCapacity(spaceId);
+            space = spaceService.getById(spaceId);
         }
         // 用于判断是新增还是修改
         Long pictureId = uploadRequest.getId();

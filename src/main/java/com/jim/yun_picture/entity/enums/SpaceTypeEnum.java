@@ -23,7 +23,7 @@ public enum SpaceTypeEnum {
         this.value = value;
     }
 
-    public static SpaceTypeEnum getSpaceTypeEnum(Integer value) {
+    public static SpaceTypeEnum getEnumByValue(Integer value) {
         for (SpaceTypeEnum spaceTypeEnum : SpaceTypeEnum.values()) {
             if (spaceTypeEnum.value.equals(value)) {
                 return spaceTypeEnum;

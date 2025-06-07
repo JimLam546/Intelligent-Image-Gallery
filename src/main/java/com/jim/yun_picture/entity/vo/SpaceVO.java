@@ -1,10 +1,9 @@
 package com.jim.yun_picture.entity.vo;
 
-import cn.hutool.core.bean.BeanUtil;
-import com.jim.yun_picture.entity.Space;
 import lombok.Data;
 
 import java.io.Serializable;
+import java.util.List;
 
 /**
  * @author Jim_Lam
@@ -57,4 +56,9 @@ public class SpaceVO implements Serializable {
      * 创建用户信息
      */
     private UserVO user;
+
+    /**
+     * 权限列表
+     */
+    private List<String> permissionList;
 }

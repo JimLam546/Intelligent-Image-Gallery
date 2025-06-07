@@ -4,6 +4,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import cn.dev33.satoken.stp.StpUtil;
 import cn.hutool.core.bean.BeanUtil;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.StrUtil;
@@ -18,6 +19,7 @@ import com.jim.yun_picture.entity.vo.UserVO;
 import com.jim.yun_picture.exception.BusinessException;
 import com.jim.yun_picture.exception.ErrorCode;
 import com.jim.yun_picture.exception.ThrowUtils;
+import com.jim.yun_picture.manage.auth.StpKit;
 import com.jim.yun_picture.service.PictureService;
 import com.jim.yun_picture.service.UserService;
 import com.jim.yun_picture.mapper.UserMapper;
@@ -117,6 +119,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         }
         // 保存用户登录态
         request.getSession().setAttribute(USER_LOGIN_STATE, user);
+        StpKit.SPACE.login(user.getId());
+        StpKit.SPACE.getSession().set(USER_LOGIN_STATE, user);
         return getSaveUser(user);
 
     }
@@ -185,6 +189,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Override
     public boolean isAdmin(UserVO userVO) {
         return userVO.getUserRole() != null && UserRoleEnum.ADMIN.getValue().equals(userVO.getUserRole());
+    }
+
+    @Override
+    public boolean isAdmin(User user) {
+        return user.getUserRole() != null && UserRoleEnum.ADMIN.getValue().equals(user.getUserRole());
     }
 }
 

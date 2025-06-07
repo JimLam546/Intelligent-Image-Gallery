@@ -24,7 +24,6 @@ import com.jim.yun_picture.service.SpaceService;
 import com.jim.yun_picture.mapper.SpaceMapper;
 import com.jim.yun_picture.service.SpaceUserService;
 import com.jim.yun_picture.service.UserService;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
@@ -201,6 +200,13 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         space.setTotalSize(oldSpace.getTotalSize() + picture.getPicSize());
         this.updateById(space);
         return true;
+    }
+
+    @Override
+    public SpaceVO getSpaceVO(Space space, UserVO loginUser) {
+        SpaceVO spaceVO = BeanUtil.copyProperties(space, SpaceVO.class);
+        spaceVO.setUser(loginUser);
+        return spaceVO;
     }
 }
 

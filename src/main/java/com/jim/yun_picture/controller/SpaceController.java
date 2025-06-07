@@ -18,13 +18,11 @@ import com.jim.yun_picture.entity.vo.SpaceVO;
 import com.jim.yun_picture.entity.vo.UserVO;
 import com.jim.yun_picture.exception.ErrorCode;
 import com.jim.yun_picture.exception.ThrowUtils;
+import com.jim.yun_picture.manage.auth.SpaceUserAuthManager;
 import com.jim.yun_picture.service.SpaceService;
 import com.jim.yun_picture.service.UserService;
 import io.swagger.annotations.ApiOperation;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
@@ -46,6 +44,9 @@ public class SpaceController {
     @Resource
     private SpaceService spaceService;
 
+    @Resource
+    private SpaceUserAuthManager spaceUserAuthManager;
+
     @PostMapping("/add")
     public BaseResponse<Boolean> addSpace(@RequestBody SpaceAddRequest spaceAddRequest, HttpServletRequest request) {
         UserVO loginUser = userService.getLoginUser(request);
@@ -53,8 +54,8 @@ public class SpaceController {
         Long spaceId = spaceService.addSpace(spaceAddRequest, loginUser);
         ThrowUtils.throwIf(spaceId <= 0, ErrorCode.OPERATION_ERROR, "空间创建失败");
         return ResultUtil.success(true);
-        }
-    
+    }
+
     @PostMapping("/update")
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     public BaseResponse<Boolean> updateSpace(@RequestBody SpaceUpdateRequest spaceUpdateRequest, HttpServletRequest request) {
@@ -90,7 +91,7 @@ public class SpaceController {
     @AuthCheck(mustRole = UserConstant.ADMIN_ROLE)
     @ApiOperation(value = "获取空间信息（管理员）")
     public BaseResponse<SpaceVO> getPictureById(@RequestBody SpaceQueryRequest spaceQueryRequest) {
-        ThrowUtils.throwIf(ObjectUtil.isNull(spaceQueryRequest.getId())|| spaceQueryRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(ObjectUtil.isNull(spaceQueryRequest.getId()) || spaceQueryRequest.getId() <= 0, ErrorCode.PARAMS_ERROR);
         Space space = spaceService.getById(spaceQueryRequest.getId());
         ThrowUtils.throwIf(ObjectUtil.isNull(space), ErrorCode.NOT_FOUND_ERROR, "存储空间不存在");
         SpaceVO spaceVO = Space.objToVO(space);
@@ -100,6 +101,24 @@ public class SpaceController {
                 spaceVO.setUser(userVO);
             }
         }
+        return ResultUtil.success(spaceVO);
+    }
+
+    /**
+     * 根据 id 获取空间（封装类）
+     */
+    @GetMapping("/get/vo")
+    public BaseResponse<SpaceVO> getSpaceVOById(long id, HttpServletRequest request) {
+        ThrowUtils.throwIf(id <= 0, ErrorCode.PARAMS_ERROR);
+        // 查询数据库
+        Space space = spaceService.getById(id);
+        ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND_ERROR);
+        UserVO loginUser = userService.getLoginUser(request);
+        SpaceVO spaceVO = spaceService.getSpaceVO(space, loginUser);
+        User user = userService.getById(loginUser.getId());
+        List<String> permissionList = spaceUserAuthManager.getPermissionList(space, user);
+        spaceVO.setPermissionList(permissionList);
+        // 获取封装类
         return ResultUtil.success(spaceVO);
     }
 
