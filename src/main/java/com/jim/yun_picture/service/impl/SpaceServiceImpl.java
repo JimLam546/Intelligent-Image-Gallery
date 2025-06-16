@@ -169,6 +169,9 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
                         boolean save = spaceUserService.save(spaceUser);
                         ThrowUtils.throwIf(!save, ErrorCode.OPERATION_ERROR, "创建空间关联创建用户失败");
                     }
+                   // 创建分表（仅对团队空间生效）为方便部署，暂时不使用
+                   //  dynamicShardingManager.createSpacePictureTable(space);
+                    // 返回新写入的数据 id
                     return space.getId();
                 });
                 return Optional.ofNullable(spaceId).orElse(-1L);
