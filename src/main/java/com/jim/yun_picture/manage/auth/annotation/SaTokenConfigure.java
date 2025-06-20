@@ -1,4 +1,4 @@
-package com.jim.yun_picture.manage.auth;
+package com.jim.yun_picture.manage.auth.annotation;
 
 import cn.dev33.satoken.interceptor.SaInterceptor;
 import cn.dev33.satoken.strategy.SaAnnotationStrategy;

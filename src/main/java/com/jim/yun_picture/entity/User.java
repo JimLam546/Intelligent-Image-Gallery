@@ -97,6 +97,11 @@ public class User implements Serializable {
     private static final long serialVersionUID = 1L;
 
     public static UserVO objToVO(User user) {
-        return BeanUtil.copyProperties(user, UserVO.class);
+        if (user == null) {
+            return null;
+        }
+        UserVO userVO = new UserVO();
+        BeanUtil.copyProperties(user, userVO);
+        return userVO;
     }
 }

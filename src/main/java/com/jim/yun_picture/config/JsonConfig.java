@@ -9,6 +9,7 @@ import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 
 /**
  * Spring MVC Json 配置
+ * @注解说明： 将类标记为Json组件，让Spring在对象序列化和反序列化时，使用自定义方式处理JSON数据
  */
 @JsonComponent
 public class JsonConfig {
